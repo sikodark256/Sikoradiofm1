@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="es">
+<head><link rel="manifest" href="panel-manifest.json">
+<meta name="theme-color" content="#171820">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Panel DJ — sikodark radio</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<style>
+:root{--bg:#171820;--card:#22232b;--sec:#2c2d35;--text:#f5f5f7;--muted:#a5a6ad;--pri:#ff8a24;--bor:rgba(255,255,255,.1);--ok:#34c759;--err:#ff3b30}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Arial,Helvetica,sans-serif;padding:16px}
+h1{font-size:20px;margin:0 0 8px}
+.sup{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.estado{font-size:12px;color:var(--muted);flex:1;min-width:150px}
+button{background:var(--pri);color:#191919;border:0;border-radius:999px;padding:10px 20px;font-weight:700;cursor:pointer}
+.mini{padding:6px 12px;margin:0;font-size:12px;background:var(--sec);color:var(--text)}
+.mini.peligro{background:rgba(255,59,48,.15);color:var(--err)}
+.mini.ok{background:rgba(52,199,89,.15);color:var(--ok)}
+.mini.activo{background:var(--pri);color:#191919;font-weight:700}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px}
+.card{background:var(--card);border:1px solid var(--bor);border-radius:14px;padding:14px;text-align:center}
+.card .n{font-size:24px;font-weight:800;color:var(--pri)}
+.card .n.vivo{color:var(--ok)}
+.card .l{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-top:4px}
+h2{font-size:15px;margin:20px 0 8px}
+table{width:100%;border-collapse:collapse;background:var(--card);border-radius:14px;overflow:hidden;border:1px solid var(--bor)}
+th,td{padding:9px 10px;text-align:left;font-size:13px;border-bottom:1px solid var(--bor)}
+th{background:var(--sec);font-size:11px;text-transform:uppercase;color:var(--muted)}
+td.num{font-weight:800;color:var(--pri)}
+.pos{color:var(--muted);font-family:monospace;font-size:12px}
+.nombreUser{font-weight:700}
+.ico{font-size:16px}
+/* ⭐ BADGE EN LÍNEA con pulso */
+.onlineBadge{display:inline-flex;align-items:center;gap:5px;background:rgba(52,199,89,.16);
+  color:var(--ok);border:1px solid rgba(52,199,89,.45);border-radius:999px;
+  padding:3px 9px;font-size:10.5px;font-weight:800;letter-spacing:.04em;white-space:nowrap}
+.onlineBadge .pt{width:8px;height:8px;border-radius:50%;background:var(--ok);
+  box-shadow:0 0 8px rgba(52,199,89,.9);animation:pulso 1.4s infinite}
+@keyframes pulso{50%{opacity:.35}}
+.offlineBadge{display:inline-block;color:#6d6e78;font-size:10.5px;white-space:nowrap}
+.tiempoLinea{display:block;font-size:11px;color:var(--ok);margin-top:3px;font-family:monospace}
+.conexion{font-family:monospace;font-size:12px}
+.conexion b{color:var(--ok)}
+.chips{margin-top:4px;display:flex;flex-wrap:wrap;gap:4px}
+.chip{background:var(--sec);color:var(--muted);border-radius:999px;padding:2px 8px;font-size:10.5px}
+.vacio{color:var(--muted);font-size:13px;padding:12px;background:var(--card);border:1px dashed var(--bor);border-radius:12px}
+.bloqueadoTxt{color:var(--err);font-size:11px}
+.sub2{display:block;color:var(--muted);font-size:11px;font-weight:400;margin-top:2px}
+.ordenBtns{display:flex;gap:6px;margin:0 0 8px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<h1>🎛️ Panel DJ — sikodark radio</h1>
+<div class="sup">
+  <span class="estado" id="estado">Conectando…</span>
+  <button class="mini" onclick="location.reload()">🔄 Actualizar</button>
+</div>
+
+<div class="cards">
+  <div class="card"><div class="n" id="cOyentes">—</div><div class="l">Oyentes únicos</div></div>
+  <div class="card"><div class="n vivo" id="cVivos">—</div><div class="l">🟢 En vivo ahora</div></div>
+  <div class="card"><div class="n" id="cLikes">—</div><div class="l">Me gusta ❤️</div></div>
+</div>
+
+<h2>👥 Oyentes registrados</h2>
+<div id="tUsuarios"></div>
+
+<h2>❤️ Me gusta</h2>
+<div class="ordenBtns">
+  <button class="mini activo" id="btnOrdenLikes">♥ Más gustados</button>
+  <button class="mini" id="btnOrdenFecha">🕘 Recientes</button>
+</div>
+<div id="tUltimos"></div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyC9Q9N1TTqWRUpeh2lo7tGuG8lwTrvbHrA",
+  authDomain: "sikodarkradio-26a07.firebaseapp.com",
+  projectId: "sikodarkradio-26a07",
+  storageBucket: "sikodarkradio-26a07.firebasestorage.app",
+  messagingSenderId: "941041207378",
+  appId: "1:941041207378:web:994e34372109d30acf778b"
+};
+
+function esc(s){return String(s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;"}[c]))}
+
+function aMs(v){
+  try{
+    if (!v) return 0;
+    if (v.toMillis) return v.toMillis();
+    if (typeof v === "number") return v;
+    const t = Date.parse(v);
+    return isNaN(t) ? 0 : t;
+  }catch(e){ return 0; }
+}
+
+function horaConexion(ms){
+  if (!ms) return "";
+  const f = new Date(ms), hoy = new Date();
+  const hora = f.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+  if (f.toDateString() === hoy.toDateString()) return hora;
+  return f.toLocaleDateString([], {day:"2-digit", month:"2-digit"}) + " " + hora;
+}
+
+/* ⭐ Cuánto tiempo lleva conectado */
+function duracion(msInicio){
+  if (!msInicio) return "";
+  const seg = Math.floor((Date.now() - msInicio)/1000);
+  if (seg < 60) return "menos de 1 min";
+  const min = Math.floor(seg/60);
+  if (min < 60) return min + " min";
+  const h = Math.floor(min/60), m = min%60;
+  if (h < 24) return h + " h" + (m ? " " + m + " min" : "");
+  const d = Math.floor(h/24);
+  return d + (d>1 ? " días" : " día");
+}
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+/* ===== 🗄️ DATOS EN MEMORIA ===== */
+const usuariosRaw = {}, presencia = {}, ultimaVisita = {};
+let megustas = [];
+
+let USERS = [];
+const UID2USER = {};
+
+const VENTANA_SENAL = 90000;       /* señal vieja de "presencia" < 1.5 min = vivo */
+const VENTANA_ONLINE = 3*60*1000;  /* latido (heartbeat) < 3 min = vivo */
+
+function reconstruir(){
+  const byHuella = {};
+  Object.entries(usuariosRaw).forEach(([docId, d]) => {
+    const clave = d.huella || docId;
+    let u = byHuella[clave];
+    if (!u) u = byHuella[clave] = { huella:clave, docId:docId, nombre:"", bloqueado:false, lastMs:0, sesionMs:0, dispositivo:"?", online:true, uids:new Set() };
+    const ms = aMs(d.ultimaConexion) || aMs(d.fechaRegistro);
+    if (ms >= u.lastMs){
+      u.lastMs = ms; u.docId = docId;
+      if (d.nombre) u.nombre = d.nombre;
+      if (d.dispositivo) u.dispositivo = d.dispositivo;
+    } else if (!u.nombre && d.nombre){ u.nombre = d.nombre; }
+    if (d.bloqueado) u.bloqueado = true;
+    if (d.online === false) u.online = false;
+    const sMs = aMs(d.sesionInicio);
+    if (sMs && (!u.sesionMs || sMs < u.sesionMs)) u.sesionMs = sMs;
+    if (d.uid) u.uids.add(d.uid);
+    if (!d.huella) u.uids.add(docId);
+  });
+  USERS = Object.values(byHuella);
+  for (const k in UID2USER) delete UID2USER[k];
+  USERS.forEach(u => u.uids.forEach(uid => UID2USER[uid] = u));
+}
+
+function dispositivoDe(u){
+  if (u.dispositivo && u.dispositivo !== "?") return u.dispositivo;
+  for (const uid of u.uids){
+    const p = presencia[uid];
+    if (p && p.dispositivo) return p.dispositivo;
+    const v = ultimaVisita[uid];
+    if (v && v.dispositivo) return v.dispositivo;
+  }
+  return "?";
+}
+const icono = d => d === "celular" ? "📱" : d === "PC" ? "💻" : d === "TV" ? "📺" : "❔";
+const ORDEN = { celular: 0, PC: 1, TV: 2 };
+
+/* ⭐ ¿Está en vivo AHORA? Latido reciente (o señal vieja de presencia) */
+function estaVivo(u){
+  for (const uid of u.uids){
+    const p = presencia[uid];
+    if (p && p.escuchando !== false && Date.now() - (p.ultimaSenal || 0) < VENTANA_SENAL) return true;
+  }
+  if (u.online !== false && u.lastMs && (Date.now() - u.lastMs) < VENTANA_ONLINE) return true;
+  return false;
+}
+
+function inicioSesion(u, uid){
+  if (u.sesionMs) return u.sesionMs;
+  const p = presencia[uid];
+  if (p && p.primeraSenal) return aMs(p.primeraSenal) || aMs(p.ultimaSenal);
+  return u.lastMs;
+}
+
+function nombreDeUid(uid){
+  return (UID2USER[uid] && UID2USER[uid].nombre) ||
+         (presencia[uid] && presencia[uid].nombre) || "Anónimo";
+}
+
+/* ===== 🔴 ESCUCHA EN VIVO ===== */
+db.collection("usuarios").onSnapshot(s => {
+  s.forEach(d => usuariosRaw[d.id] = d.data());
+  reconstruir(); render();
+});
+db.collection("presencia").onSnapshot(s => { s.forEach(d => presencia[d.id] = d.data()); render(); });
+db.collection("megustas").onSnapshot(s => { megustas = s.docs.map(d => d.data()); render(); });
+
+db.collection("visitas").orderBy("fecha","desc").limit(300).get().then(s => {
+  s.forEach(d => {
+    const v = d.data(); if (!v.uid) return;
+    const prev = ultimaVisita[v.uid];
+    if (!prev || String(v.fecha || "") > String(prev.fecha || "")) ultimaVisita[v.uid] = v;
+  });
+  render();
+}).catch(function(){});
+
+/* Refresca los tiempos cada 15s aunque no haya cambios en Firebase */
+setInterval(render, 15000);
+
+/* ===== 🎨 RENDER ===== */
+function render(){
+  document.getElementById("estado").textContent =
+    "✅ Datos actualizados: " + new Date().toLocaleTimeString() + " · en vivo";
+
+  document.getElementById("cOyentes").textContent = USERS.length;
+  const vivos = USERS.filter(estaVivo).length;
+  document.getElementById("cVivos").textContent = vivos;
+  document.getElementById("cLikes").textContent = megustas.length;
+
+  const ordenados = USERS.slice().sort((a,b) => {
+    const va = estaVivo(a) ? 0 : 1, vb = estaVivo(b) ? 0 : 1;
+    if (va !== vb) return va - vb;
+    if (b.lastMs !== a.lastMs) return b.lastMs - a.lastMs;
+    const da = ORDEN[dispositivoDe(a)] ?? 9, dbo = ORDEN[dispositivoDe(b)] ?? 9;
+    if (da !== dbo) return da - dbo;
+    return (a.nombre||"Anónimo").localeCompare(b.nombre||"Anónimo");
+  });
+
+  document.getElementById("tUsuarios").innerHTML = ordenados.length
+    ? '<table><tr><th>Estado</th><th></th><th>Oyente</th><th>Conexión</th><th>Control</th></tr>' +
+      ordenados.map(u => {
+        const vivo = estaVivo(u);
+        const disp = dispositivoDe(u);
+        const hora = horaConexion(u.lastMs);
+        const tiempo = duracion(inicioSesion(u, u.docId));
+        const estado = vivo
+          ? '<span class="onlineBadge"><span class="pt"></span>EN LÍNEA</span>' +
+            (tiempo ? '<span class="tiempoLinea">⏱ ' + tiempo + '</span>' : '')
+          : '<span class="offlineBadge">○ ' + (hora ? "Visto " + hora : "desconectado") + '</span>';
+        return '<tr>' +
+          '<td>' + estado + '</td>' +
+          '<td class="ico" title="' + esc(disp) + '">' + icono(disp) + '</td>' +
+          '<td><span class="nombreUser">' + esc(u.nombre || "Anónimo") + '</span>' +
+            (u.bloqueado ? ' <span class="bloqueadoTxt">🚫 bloqueado</span>' : '') + '</td>' +
+          '<td class="conexion">' + (vivo
+            ? 'Conectado <b>' + (hora || "ahora") + '</b>'
+            : (hora ? '<span style="color:var(--muted)">' + hora + '</span>' : "—")) + '</td>' +
+          '<td>' +
+            '<button class="mini ' + (u.bloqueado ? "ok" : "peligro") + '" onclick="bloquearUsuario(\'' + u.docId + '\', ' + !!u.bloqueado + ')">' + (u.bloqueado ? "✅" : "🚫") + '</button>' +
+            '<button class="mini" onclick="renombrarUsuario(\'' + u.docId + '\')">✏️</button>' +
+          '</td></tr>';
+      }).join("") + '</table>'
+    : '<div class="vacio">Aún no hay oyentes registrados.</div>';
+
+  /* --- ❤️ Me gusta ordenable (deduplicado por usuario+tema) --- */
+  const porTema = {};
+  megustas.forEach(m => {
+    const art = (m.artista || "Desconocido").trim();
+    const tema = (m.tema || "").trim();
+    if (!tema) return;
+    const k = art + "||" + tema;
+    if (!porTema[k]) porTema[k] = { artista: art, tema: tema, n: 0, uids: new Set(), fecha: 0 };
+    porTema[k].n++;
+    if (m.uid) porTema[k].uids.add(m.uid);
+    const f = aMs(m.fecha);
+    if (f > porTema[k].fecha) porTema[k].fecha = f;
+  });
+  const temas = Object.values(porTema).sort((a,b) =>
+    ordenTemas === "likes"
+      ? (b.n - a.n) || (b.fecha - a.fecha)   /* ⭐ más gustados primero */
+      : (b.fecha - a.fecha) || (b.n - a.n)   /* ⭐ recientes primero */
+  );
+  document.getElementById("tUltimos").innerHTML = temas.length
+    ? '<table><tr><th>#</th><th>Tema</th><th>Oyentes</th><th>❤️</th><th>Fecha</th></tr>' + temas.map((t,i) => {
+        let f = "—"; if (t.fecha) f = horaConexion(t.fecha) + " h";
+        const chips = [...t.uids].map(u => '<span class="chip">' + esc(nombreDeUid(u)) + '</span>').join("");
+        return '<tr><td class="pos">' + (i+1) + '</td>' +
+          '<td>❤️ ' + esc(t.tema) + '<span class="sub2">' + esc(t.artista) + '</span></td>' +
+          '<td>' + (chips ? '<div class="chips">' + chips + '</div>' : '—') + '</td>' +
+          '<td class="num">' + t.n + '</td>' +
+          '<td class="pos">' + f + '</td></tr>';
+      }).join("") + '</table>'
+    : '<div class="vacio">Todavía no hay me gusta.</div>';
+}
+
+/* ===== 🔀 ORDEN DE "ME GUSTA" ===== */
+let ordenTemas = "likes";
+document.getElementById("btnOrdenLikes").onclick = function(){
+  ordenTemas = "likes";
+  this.classList.add("activo");
+  document.getElementById("btnOrdenFecha").classList.remove("activo");
+  render();
+};
+document.getElementById("btnOrdenFecha").onclick = function(){
+  ordenTemas = "fecha";
+  this.classList.add("activo");
+  document.getElementById("btnOrdenLikes").classList.remove("activo");
+  render();
+};
+
+/* ===== 🛠️ CONTROLES ===== */
+window.bloquearUsuario = async function(id, estaBloqueado){
+  try{
+    if (estaBloqueado){
+      await db.collection("usuarios").doc(id).set({ bloqueado: false }, { merge:true });
+      return;
+    }
+    if (confirm("¿Bloquear a este oyente? No podrá usar la radio.")){
+      await db.collection("usuarios").doc(id).set({ bloqueado: true }, { merge:true });
+    }
+  }catch(e){ alert("Error: " + e.message); }
+};
+
+window.renombrarUsuario = async function(id){
+  const u = USERS.find(x => x.docId === id);
+  const actual = (u && u.nombre) || "Anónimo";
+  const nuevo = prompt("Nombre del oyente:", actual);
+  if (nuevo && nuevo.trim().length >= 2){
+    await db.collection("usuarios").doc(id).set({ nombre: nuevo.trim().slice(0,20) }, { merge:true });
+  }
+};
+
+firebase.auth().signInAnonymously()
+  .catch(e => { document.getElementById("estado").textContent = "❌ Error: " + e.message; });
+</script>
+
+<!-- ===== ⇩ INSTALAR PANEL COMO APP ===== -->
+<button id="btnInstalarPanel" style="display:none;position:fixed;bottom:18px;right:18px;z-index:100000;background:var(--pri);color:#191919;border:0;border-radius:999px;padding:12px 20px;font-weight:700;box-shadow:0 8px 25px rgba(0,0,0,.4)">⇩ Instalar panel</button>
+<script>
+(function(){
+  let dpPanel = null;
+  window.addEventListener("beforeinstallprompt", function(e){
+    e.preventDefault();
+    dpPanel = e;
+    var b = document.getElementById("btnInstalarPanel");
+    if (b) b.style.display = "block";
+  });
+  var b = document.getElementById("btnInstalarPanel");
+  if (b) b.onclick = function(){
+    if (dpPanel){ dpPanel.prompt(); b.style.display = "none"; }
+  };
+})();
+</script>
+</body>
+</html>

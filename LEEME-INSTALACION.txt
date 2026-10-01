@@ -1,0 +1,80 @@
+==========================================================
+   SIKODARK RADIO — PWA CORREGIDA v5
+   ¿Qué estaba mal y qué se arregló?
+==========================================================
+
+⚠️  LO QUE VISTE EN TU CELULAR NO ES UN ERROR
+   -------------------------------------------------
+   El cartel "¿Desea añadir a la pantalla de inicio?"
+   con el botón "Añadir" ES la instalación de la PWA.
+   No es un mero "acceso directo" — en Android, las PWA
+   se instalan exactamente así. Tocá "Añadir" y listo.
+
+   Si después de tocar "Añadir" la app sigue abriéndose
+   con la barra de Chrome, el problema es CACHÉ VIEJO:
+   el service worker antiguo sigue sirviendo la versión
+   vieja. Esta nueva versión (v5) se limpia sola.
+
+
+⚠️  PROBLEMA 1: No se instalaba como app real
+   -------------------------------------------------
+   CAUSA: manifest.json declaraba apple-icon.png como
+   192x192 pero era 180x180. Chrome rechaza íconos con
+   tamaño incorrecto → no cumplía requisitos de PWA.
+
+   ✅ REPARADO: íconos regenerados del ojito original,
+   tamaños exactos 192 y 512, + versiones maskable.
+
+
+⚠️  PROBLEMA 2: Notificación mostraba "Chrome" y ojo genérico
+   -------------------------------------------------
+   CAUSA: PWA no instalada → Chrome muestra su propio
+   nombre en la notificación. Además MediaSession usaba
+   rutas relativas.
+
+   ✅ REPARADO: URLs absolutas + logo de alta resolución.
+   Una vez instalada la PWA, la notificación muestra
+   "sikodark" y tu ojito.
+
+
+==========================================================
+   PASOS EXACTOS (hacerlos en orden)
+==========================================================
+
+1. Subí TODOS los archivos a tu hosting (misma carpeta).
+   Verificá que sw.js se suba — si falta, no hay PWA.
+
+2. En tu celular: Chrome → los 3 puntitos ⋮ →
+   "Configuración" → "Privacidad" → "Borrar datos de
+   navegación" → marcá "Cookies y datos de sitios" y
+   "Imágenes y archivos en caché" → Borrar.
+   (Esto elimina el service worker viejo.)
+
+3. Entrá de nuevo a la URL. Verás un panel de
+   diagnóstico (letras chiquitas) que dice:
+   ✅ HTTPS correcto
+   ✅ Service Worker ACTIVO (v5)
+   Si todo dice ✅, la app está lista.
+
+4. Tocá el botón "⇩ Instalar app en mi celular"
+   (o los 3 puntitos ⋮ → "Instalar app").
+
+5. Tocá "Añadir" en el cartel que aparece.
+
+6. CERRÁ Chrome. Abrí desde el ícono nuevo de la
+   pantalla de inicio. Ahora es una app real sin barra.
+
+7. Dale play → la notificación muestra tu nombre y logo.
+
+
+==========================================================
+   SI SIGUE SIN FUNCIONAR
+==========================================================
+
+• Mirá el panel de diagnóstico dentro de la app. Si
+  algo dice ❌, ese es el problema.
+
+• Lo más común: sw.js no se subió. Verificá entrando a
+  tu-sitio/sw.js — debe mostrar código, no error 404.
+
+• El sitio DEBE ser HTTPS (candado 🔒 en la barra).

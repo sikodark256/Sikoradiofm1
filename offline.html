@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>sikodark radio · sin conexión</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800;900&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0}
+body{min-height:100vh;background:#000;color:#f5f5f7;font-family:'Montserrat',Arial,sans-serif;
+ display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:32px 20px;text-align:center}
+.logo{width:110px;height:110px;border-radius:50%;object-fit:cover;border:2px solid rgba(245,157,61,.5);
+ box-shadow:0 0 40px rgba(245,157,61,.25);animation:latido 2.2s ease-in-out infinite}
+@keyframes latido{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+h1{font-size:15px;text-transform:uppercase;letter-spacing:.14em;color:#96969f;font-weight:800}
+.off{font-size:26px;font-weight:900;text-transform:uppercase;color:#f59d3d;line-height:1.2}
+.msg{color:#a8a9b3;font-size:14px;font-weight:600;max-width:300px;line-height:1.5}
+.btn{margin-top:6px;background:#f59d3d;color:#191919;border:0;border-radius:999px;padding:13px 34px;
+ font-family:inherit;font-weight:900;font-size:14px;text-transform:uppercase;cursor:pointer;
+ box-shadow:0 8px 25px rgba(245,157,61,.3)}
+.btn:active{transform:scale(.95)}
+.reintento{font-size:11px;color:#6d6e78;font-weight:600;letter-spacing:.05em}
+.punto{display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff3b30;margin-right:6px;animation:parp 1.2s infinite}
+@keyframes parp{50%{opacity:.3}}
+</style>
+</head>
+<body>
+<img class="logo" src="apple-icon.png" alt="sikodark">
+<h1>sikodark radio</h1>
+<div class="off"> Sin conexión a Internet</div>
+<p class="msg">No hay internet en este momento.<br>Reconectate y seguís disfrutando tu música </p>
+<button class="btn" onclick="location.reload()">Reintentar</button>
+<p class="reintento"><span class="punto"></span>Buscando señal… volvemos solos cuando haya internet</p>
+
+<script>
+function intentar(){
+  fetch('./?__probe__=' + Date.now(), {cache:'no-store'})
+    .then(function(r){ if (r.ok) location.reload(); })
+    .catch(function(){});
+}
+window.addEventListener('online', intentar);
+setInterval(intentar, 5000);
+</script>
+</body>
+</html>

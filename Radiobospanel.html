@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panel Sikodark FM</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: sans-serif; }
+    body { background: #1a1a2e; color: white; padding: 20px; max-width: 500px; margin: 0 auto; }
+    .cancion { background: #16213e; padding: 20px; border-radius: 12px; margin-bottom: 20px; text-align: center; }
+    .portada { width: 150px; height: 150px; border-radius: 8px; margin-bottom: 10px; object-fit: cover; }
+    .controles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
+    button { padding: 15px; border: none; border-radius: 8px; font-size: 18px; cursor: pointer; font-weight: bold; }
+    .btn-verde { background: #28a745; color: white; }
+    .btn-rojo { background: #dc3545; color: white; }
+    .btn-azul { background: #007bff; color: white; }
+    .btn-naranja { background: #fd7e14; color: white; }
+    .lista { background: #16213e; padding: 15px; border-radius: 8px; }
+    .lista-item { padding: 10px; border-bottom: 1px solid #333; cursor: pointer; }
+    .lista-item:hover { background: #0f3460; }
+    .volumen { margin: 15px 0; }
+  </style>
+</head>
+<body>
+
+  <h2 style="text-align:center; margin-bottom:15px;">🎛️ Sikodark FM — Control</h2>
+
+  <!-- Canción Actual -->
+  <div class="cancion">
+    <img id="portada" class="portada" alt="Portada">
+    <h3 id="titulo">Cargando...</h3>
+    <p id="artista"></p>
+    <p id="estado" style="margin-top:8px; color:#28a745;">● En vivo</p>
+  </div>
+
+  <!-- Botones de Control -->
+  <div class="controles">
+    <button class="btn-verde" onclick="reproducir()">▶ Play</button>
+    <button class="btn-rojo" onclick="detener()">⏹ Stop</button>
+    <button class="btn-azul" onclick="siguiente()">⏭ Siguiente</button>
+    <button class="btn-naranja" onclick="anterior()">⏮ Anterior</button>
+    <button class="btn-azul" onclick="pausar()">⏸ Pausa</button>
+    <button class="btn-verde" onclick="desvanecer()">🌫️ Fade</button>
+  </div>
+
+  <!-- Volumen -->
+  <div class="volumen">
+    <label>🔊 Volumen: <span id="vol-valor">80</span>%</label>
+    <input type="range" id="volumen" min="0" max="100" value="80" style="width:100%;" onchange="cambiarVolumen(this.value)">
+  </div>
+
+  <!-- Lista de Reproducción -->
+  <div class="lista">
+    <h4 style="margin-bottom:10px;">📋 Próximas canciones</h4>
+    <div id="lista-canciones"></div>
+    <button class="btn-verde" style="width:100%; margin-top:10px; padding:8px; font-size:14px;" onclick="limpiarLista()">🗑️ Limpiar lista</button>
+  </div>
+
+<script>
+// ===== CONFIGURA AQUÍ TU DIRECCIÓN DE NGROK =====
+const API_URL = "https://TU-DIRECCION.ngrok.io";  // ← Cambia esto!
+const API_PASS = "GXpnM0DrEM";
+
+// ========== CANCIÓN ACTUAL ==========
+async function cargarInfo() {
+  try {
+    const res = await fetch(`${API_URL}/info?password=${API_PASS}`);
+    const xml = new DOMParser().parseFromString(await res.text(), "text/xml");
+    
+    const artista = xml.querySelector("artist")?.textContent || "Sikodark FM";
+    const titulo = xml.querySelector("title")?.textContent || "En vivo";
+    const estado = xml.querySelector("state")?.textContent;
+    const vol = xml.querySelector("volume")?.textContent || 80;
+
+    document.getElementById("artista").textContent = artista;
+    document.getElementById("titulo").textContent = titulo;
+    document.getElementById("vol-valor").textContent = vol;
+    document.getElementById("volumen").value = vol;
+    
+    const estadoEl = document.getElementById("estado");
+    estadoEl.textContent = estado === "playing" ? "● Reproduciendo" : estado === "paused" ? "⏸ Pausado" : "⏹ Detenido";
+    estadoEl.style.color = estado === "playing" ? "#28a745" : "#dc3545";
+
+    document.getElementById("portada").src = `${API_URL}/getartwork?password=${API_PASS}&t=${Date.now()}`;
+  } catch (err) {
+    console.error("Error:", err);
+    document.getElementById("titulo").textContent = "Sin conexión";
+  }
+}
+
+// ========== CONTROLES ==========
+async function enviarComando(cmd) {
+  try {
+    await fetch(`${API_URL}/${cmd}?password=${API_PASS}`);
+    cargarInfo();
+    cargarLista();
+  } catch (e) { alert("Error: " + e.message); }
+}
+
+function reproducir() { enviarComando("play"); }
+function detener() { enviarComando("stop"); }
+function pausar() { enviarComando("pause"); }
+function siguiente() { enviarComando("next"); }
+function anterior() { enviarComando("prev"); }
+function desvanecer() { enviarComando("fadeout"); }
+
+async function cambiarVolumen(valor) {
+  try {
+    await fetch(`${API_URL}/setvol?password=${API_PASS}&volume=${valor}`);
+    document.getElementById("vol-valor").textContent = valor;
+  } catch (e) {}
+}
+
+// ========== LISTA DE CANCIONES ==========
+async function cargarLista() {
+  try {
+    const res = await fetch(`${API_URL}/getplaylist?password=${API_PASS}`);
+    const xml = new DOMParser().parseFromString(await res.text(), "text/xml");
+    const items = xml.querySelectorAll("item");
+    const listaEl = document.getElementById("lista-canciones");
+    listaEl.innerHTML = "";
+
+    items.forEach((item, pos) => {
+      const art = item.querySelector("artist")?.textContent || "Desconocido";
+      const tit = item.querySelector("title")?.textContent || "Sin título";
+      const div = document.createElement("div");
+      div.className = "lista-item";
+      div.textContent = `${pos+1}. ${art} - ${tit}`;
+      div.onclick = () => reproducirNumero(pos+1);
+      listaEl.appendChild(div);
+    });
+  } catch (e) {}
+}
+
+async function reproducirNumero(numero) {
+  if (!confirm(`¿Reproducir pista #${numero}?`)) return;
+  try {
+    await fetch(`${API_URL}/play?password=${API_PASS}&pos=${numero}`);
+    setTimeout(cargarInfo, 500);
+  } catch (e) {}
+}
+
+async function limpiarLista() {
+  if (!confirm("¿Limpiar toda la lista?")) return;
+  try {
+    await fetch(`${API_URL}/clearplaylist?password=${API_PASS}`);
+    setTimeout(cargarLista, 500);
+  } catch (e) {}
+}
+
+// ========== ACTUALIZAR ==========
+cargarInfo();
+cargarLista();
+setInterval(() => { cargarInfo(); cargarLista(); }, 8000);
+</script>
+</body>
+</html>

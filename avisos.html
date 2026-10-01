@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Avisos — sikodark</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<style>
+:root{--primary:#ff8a24;--card:#22232b;--secondary:#2c2d35;--text:#f5f5f7;--muted:#a5a6ad;--ok:#34c759;--err:#ff3b30}
+*{box-sizing:border-box}
+body{margin:0;background:#0e0f14;color:var(--text);font-family:system-ui,sans-serif;padding:14px;padding-bottom:120px}
+h1{font-size:1.1rem;text-align:center;margin:.4rem 0 .3rem}
+.sub{text-align:center;color:var(--muted);font-size:.8rem;margin:0 0 14px}
+.caja{max-width:420px;margin:0 auto}
+.card{background:var(--card);border:1px solid #2a2b33;border-radius:14px;padding:14px;margin-bottom:12px}
+.seccion{font-size:.68rem;font-weight:bold;text-transform:uppercase;color:#778;letter-spacing:.1em;margin:0 0 10px}
+label{display:block;font-size:.74rem;color:#99a;margin:8px 0 3px}
+input[type=password],input[type=email],input[type=text],select,textarea{width:100%;padding:11px;border:1px solid #333;border-radius:9px;background:#0e0f14;color:#eee;font-size:1rem}
+textarea{resize:vertical;min-height:70px;font-family:inherit}
+input[type=file]{width:100%;font-size:.75rem;color:#99a;margin-top:4px}
+.btn{width:100%;padding:13px;border:0;border-radius:10px;background:var(--primary);color:#171820;font-weight:800;font-size:.95rem;cursor:pointer;margin-top:6px}
+.btn.gris{background:#2a2b33;color:#ccc;font-weight:600}
+.btn.rojo{background:rgba(255,59,48,.15);color:var(--err);font-weight:700}
+.btn:disabled{opacity:.5}
+#estado{position:fixed;bottom:0;left:0;right:0;padding:12px 16px;background:#101116;border-top:1px solid #2a2b33;font-size:.8rem;color:#99a;min-height:44px;z-index:5}
+#estado.ok{color:var(--ok)} #estado.err{color:var(--err)}
+.hidden{display:none}
+.error{color:var(--err);font-size:.8rem;margin-top:8px;text-align:center}
+.prev{background:var(--secondary);border-radius:12px;overflow:hidden;display:none;margin-top:8px}
+.prev img{width:100%;display:block}
+.vigente{display:flex;align-items:center;gap:8px;background:rgba(52,199,89,.1);border:1px solid rgba(52,199,89,.3);
+  border-radius:10px;padding:10px;font-size:.8rem;margin-bottom:12px}
+.vigente.no{background:rgba(255,255,255,.04);border-color:#2a2b33;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<div class="caja" id="vLogin">
+  <h1>🔐 Panel de Avisos</h1>
+  <p class="sub">sikodark radio · solo para el administrador</p>
+  <div class="card">
+    <label>Email</label><input type="email" id="email" autocomplete="username">
+    <label>Contraseña</label><input type="password" id="pass" autocomplete="current-password">
+    <button class="btn" id="btnLogin">Entrar</button>
+    <div class="error" id="lErr"></div>
+  </div>
+</div>
+
+<div class="caja hidden" id="vPanel">
+  <h1>📣 Avisos sikodark</h1>
+  <p class="sub">Publicás acá → aparece en la radio de todos, al instante</p>
+
+  <div class="vigente no" id="estadoActual">—</div>
+
+  <div class="card">
+    <div class="seccion">🖼️ El aviso</div>
+    <label>Imagen (de tu galería — se comprime sola)</label>
+    <input type="file" id="anImg" accept="image/*">
+    <div class="prev" id="anPrev"><img id="anPrevImg" alt=""></div>
+    <label>Texto que acompaña (opcional)</label>
+    <textarea id="anTexto" placeholder="Ej: 🎉 Viernes especial de rock nacional, desde las 22h"></textarea>
+    <label>Texto del botón (vacío = sin botón)</label>
+    <input type="text" id="anBoton" placeholder="Ver más">
+    <label>Enlace del botón (opcional)</label>
+    <input type="text" id="anEnlace" placeholder="https://...">
+  </div>
+
+  <div class="card">
+    <div class="seccion">⚙️ Cuándo se muestra</div>
+    <label>Frecuencia (para quienes abran la app después)</label>
+    <select id="anFreq">
+      <option value="sesion">1 vez por apertura (recomendado)</option>
+      <option value="siempre">Cada vez que abren la app</option>
+    </select>
+  </div>
+
+  <button class="btn" id="btnPublicar">🚀 Publicar aviso (aparece YA en quienes escuchan)</button>
+  <button class="btn gris" id="btnReenviar">🔔 Reenviar el aviso actual en vivo</button>
+  <button class="btn rojo" id="btnQuitar">🗑️ Quitar el aviso actual</button>
+  <button class="btn gris" id="btnSalir">🚪 Salir</button>
+</div>
+
+<div id="estado">Listo.</div>
+
+<script>
+const ADMIN_EMAIL = "sikoradio@hotmail.com";  /* tu email admin */
+firebase.initializeApp({
+  apiKey: "AIzaSyC9Q9N1TTqWRUpeh2lo7tGuG8lwTrvbHrA",
+  authDomain: "sikodarkradio-26a07.firebaseapp.com",
+  projectId: "sikodarkradio-26a07"
+});
+const db = firebase.firestore(), $ = id => document.getElementById(id);
+
+let cfg = { anuncio: { activo:false, imagen:"", texto:"", enlace:"", textoBoton:"", frecuencia:"sesion", publicadoEn:0 } };
+let imagenBase64 = null;
+
+function estado(m, t){ $("estado").textContent = m; $("estado").className = t || ""; }
+
+/* 🔐 Login */
+ $("btnLogin").onclick = () => {
+  estado("Verificando…");
+  firebase.auth().signInWithEmailAndPassword($("email").value, $("pass").value)
+    .catch(() => { $("lErr").textContent = "Email o contraseña incorrectos"; estado(""); });
+};
+firebase.auth().onAuthStateChanged(u => {
+  if (u && u.email === ADMIN_EMAIL) {
+    $("vLogin").classList.add("hidden");
+    $("vPanel").classList.remove("hidden");
+    cargar();
+  } else if (u) {
+    $("lErr").textContent = "Esta cuenta no es administradora";
+    firebase.auth().signOut();
+  }
+});
+ $("btnSalir").onclick = () => firebase.auth().signOut();
+
+/* 📥 Cargar aviso vigente */
+async function cargar(){
+  estado("Cargando aviso actual…");
+  try {
+    const doc = await db.collection("config").doc("avisos").get();
+    if (doc.exists && doc.data().anuncio){
+      cfg = doc.data();
+      if (!cfg.anuncio.texto) cfg.anuncio.texto = "";
+      if (!cfg.anuncio.publicadoEn) cfg.anuncio.publicadoEn = 0;
+    }
+  } catch(e) { estado("⚠️ No pude leer el aviso actual"); }
+  pintarEstado();
+  $("anTexto").value = cfg.anuncio.texto || "";
+  $("anBoton").value = cfg.anuncio.textoBoton || "";
+  $("anEnlace").value = cfg.anuncio.enlace || "";
+  $("anFreq").value = cfg.anuncio.frecuencia || "sesion";
+  if (cfg.anuncio.imagen){
+    $("anPrev").style.display = "block";
+    $("anPrevImg").src = cfg.anuncio.imagen;
+  }
+}
+function pintarEstado(){
+  const e = $("estadoActual");
+  if (cfg.anuncio.activo && cfg.anuncio.imagen){
+    e.className = "vigente";
+    e.textContent = "🟢 AVISO ACTIVO — en la radio ahora";
+  } else {
+    e.className = "vigente no";
+    e.textContent = "⚪ Sin aviso activo";
+  }
+}
+
+/* 📷 Imagen */
+ $("anImg").addEventListener("change", e => {
+  const f = e.target.files[0]; if (!f) return;
+  estado("📷 Procesando imagen…");
+  const img = new Image();
+  img.onload = () => {
+    const esc = Math.min(1, 1080 / img.width);
+    const c = document.createElement("canvas");
+    c.width = Math.round(img.width * esc);
+    c.height = Math.round(img.height * esc);
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    imagenBase64 = c.toDataURL("image/jpeg", .82);
+    $("anPrev").style.display = "block";
+    $("anPrevImg").src = imagenBase64;
+    estado("✅ Imagen lista (" + Math.round(imagenBase64.length/1024) + " KB)");
+  };
+  img.src = URL.createObjectURL(f);
+});
+
+ $("anTexto").addEventListener("input", () => cfg.anuncio.texto = $("anTexto").value);
+ $("anBoton").addEventListener("input", () => cfg.anuncio.textoBoton = $("anBoton").value.trim());
+ $("anEnlace").addEventListener("input", () => cfg.anuncio.enlace = $("anEnlace").value.trim());
+ $("anFreq").addEventListener("change", () => cfg.anuncio.frecuencia = $("anFreq").value);
+
+/* 🚀 Publicar (guarda + envío en vivo automático) */
+const btnPub = $("btnPublicar");
+ $("btnPublicar").onclick = async () => {
+  if (imagenBase64) cfg.anuncio.imagen = imagenBase64;
+  if (!cfg.anuncio.imagen){
+    estado("⚠️ Falta la imagen del aviso", "err"); return;
+  }
+  cfg.anuncio.activo = true;
+  cfg.anuncio.publicadoEn = Date.now();
+  btnPub.disabled = true;
+  try {
+    estado("💾 Publicando…");
+    await db.collection("config").doc("avisos").set(cfg);
+    estado("✅ ¡Publicado! Ya aparece en quienes están escuchando", "ok");
+    pintarEstado();
+    imagenBase64 = null;
+    $("anImg").value = "";
+  } catch(e) { estado("❌ Error: " + e.message, "err"); }
+  btnPub.disabled = false;
+};
+
+/* 🔔 Reenviar el mismo aviso en vivo */
+ $("btnReenviar").onclick = async () => {
+  if (!cfg.anuncio.activo || !cfg.anuncio.imagen){
+    estado("⚠️ No hay aviso activo para reenviar", "err"); return;
+  }
+  try {
+    cfg.anuncio.publicadoEn = Date.now();
+    estado("🔔 Enviando en vivo…");
+    await db.collection("config").doc("avisos").set(cfg);
+    estado("✅ Enviado — salta en todas las pantallas", "ok");
+  } catch(e) { estado("❌ Error: " + e.message, "err"); }
+};
+
+/* 🗑️ Quitar */
+ $("btnQuitar").onclick = async () => {
+  if (!confirm("¿Quitar el aviso actual?")) return;
+  cfg.anuncio.activo = false;
+  try {
+    await db.collection("config").doc("avisos").set(cfg);
+    estado("🗑️ Aviso quitado", "ok");
+    pintarEstado();
+  } catch(e) { estado("❌ Error: " + e.message, "err"); }
+};
+</script>
+</body>
+</html>
