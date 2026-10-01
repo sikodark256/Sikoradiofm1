@@ -1,54 +1,92 @@
-/* sikodark radio — Service Worker v6 (simple y estable) */
-const CACHE = 'sikodark-v6';
+const CACHE_NAME = 'radioful-v1';
 const ASSETS = [
-  './',
-  './index.html',
-  './offline.html',
-  './manifest.json',
-  './icon-192.png',
-  './icon-512.png',
-  './icon-192-maskable.png',
-  './icon-512-maskable.png',
-  './apple-icon.png',
-  './apple-touch-icon.png',
-  './logo-notificacion.png'
+  '/',
+  '/index.html',
+  '/offline.html',
+  '/manifest.json',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/icon.svg'
 ];
 
-self.addEventListener('install', e => {
+// Instalación del Service Worker y almacenamiento en caché
+self.addEventListener('install', (e) => {
   e.waitUntil(
-    caches.open(CACHE)
-      .then(c => c.addAll(ASSETS))
-      .then(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(ASSETS);
+    }).then(() => self.skipWaiting())
   );
 });
 
-self.addEventListener('activate', e => {
+// Activación y limpieza de versiones viejas de caché
+self.addEventListener('activate', (e) => {
   e.waitUntil(
-    caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
-      .then(() => self.clients.claim())
+    caches.keys().then((keys) => {
+      return Promise.all(
+        keys.map((key) => {
+          if (key !== CACHE_NAME) {
+            return caches.delete(key);
+          }
+        })
+      );
+    }).then(() => self.clients.claim())
   );
 });
 
-self.addEventListener('fetch', e => {
-  const req = e.request;
-  if (req.method !== 'GET') return;
-  const url = new URL(req.url);
-  /* No cachear audio stream ni APIs externas */
-  if (url.hostname.includes('zeno.fm')) return;
-  if (url.hostname.includes('firebase') || url.hostname.includes('googleapis')) return;
-  if (req.headers.has('range')) return;
-
-  /* Estrategia: red primero, si falla usar caché */
+// Intercepción de peticiones de red (Cache First con caída a offline.html)
+self.addEventListener('fetch', (e) => {
   e.respondWith(
-    fetch(req)
-      .then(res => {
-        const cp = res.clone();
-        if (url.origin === location.origin && res.ok) {
-          caches.open(CACHE).then(c => c.put(req, cp));
+    caches.match(e.request).then((cachedResponse) => {
+      if (cachedResponse) return cachedResponse;
+      return fetch(e.request).catch(() => {
+        if (e.request.mode === 'navigate') {
+          return caches.match('/offline.html');
         }
-        return res;
-      })
-      .catch(() => caches.match(req).then(r => r || caches.match('./index.html')))
+      });
+    })
+  );
+});
+
+// CONTROL DE NOTIFICACIONES PUSH (Aquí se soluciona lo de Chrome)
+self.addEventListener('push', (e) => {
+  let data = { title: 'Sikodark', body: '¡Ya estamos al aire con la mejor música!' };
+  
+  if (e.data) {
+    try {
+      data = e.data.json();
+    } catch (err) {
+      data.body = e.data.text();
+    }
+  }
+
+  const options = {
+    body: data.body,
+    icon: '/icon-192.png',       // Tu logo a color (se muestra dentro de la notificación)
+    badge: '/icon.svg',          // Tu silueta blanca transparente (para la barra de estado superior)
+    vibrate:,
+    data: {
+      url: data.url || '/'
+    }
+  };
+
+  e.waitUntil(
+    self.registration.showNotification(data.title, options)
+  );
+});
+
+// Acción al hacer clic en la notificación
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  e.waitUntil(
+    clients.matchAll({ type: 'window' }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url === e.notification.data.url && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(e.notification.data.url);
+      }
+    })
   );
 });
